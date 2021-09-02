@@ -1,62 +1,57 @@
 package com.training.videoeditor
 
 import android.app.ProgressDialog
+import android.content.ContentUris
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
+import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
-import com.arthenica.mobileffmpeg.Config.*
+import com.arthenica.mobileffmpeg.Config
 import com.arthenica.mobileffmpeg.ExecuteCallback
 import com.arthenica.mobileffmpeg.FFmpeg
-import com.training.videoeditor.FileUtils.getFileFromUri
 import org.florescu.android.rangeseekbar.RangeSeekBar
 import java.io.File
 
-
 class TrimVideoActivity : AppCompatActivity() {
-    lateinit var videoView:VideoView
+    lateinit var videoView: VideoView
     lateinit var i: Intent
-    lateinit var video_url:Uri
+    lateinit var video_url: Uri
     lateinit var buttonPlayPause: ImageButton
-    lateinit var leftText:TextView
-    lateinit var rightText:TextView
-    lateinit var rangeSeekBar:RangeSeekBar<Number>
-    var isPlaying=false
-    var duration:Int = 0
-    var filePrefix:String?=null
-    lateinit var dest:File
-    var original_path:String?=null
-    var filePath:String?=null
-    lateinit var command:Array<String?>
-    lateinit var trim_button:Button
-    lateinit var r:Runnable
-   var uri_ofFileCreated: Uri?=null
-    val root:String=Environment.getExternalStorageDirectory().toString()
-    val app_folder:String="$root/Trimmed/"
-    lateinit var videoPath:String
-    lateinit var   progressDialog: ProgressDialog
-    lateinit var compressButton:Button
-    lateinit var slowButton:Button
+    lateinit var leftText: TextView
+    lateinit var rightText: TextView
+    lateinit var rangeSeekBar: RangeSeekBar<Number>
+    var isPlaying = false
+    var filePath: String? = null
+    lateinit var trim_button: Button
+    lateinit var r: Runnable
+    val root: String = Environment.getExternalStorageDirectory().toString()
+    lateinit var videoPath: String
+    lateinit var progressDialog: ProgressDialog
+    lateinit var compressButton: Button
+    lateinit var slowButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_trim_video)
-        videoView=findViewById(R.id.videoView)
-        buttonPlayPause=findViewById(R.id.buttonPlay_Pause)
-        leftText=findViewById(R.id.leftText)
-        rightText=findViewById(R.id.rightText)
-        rangeSeekBar=findViewById(R.id.rangeSeekBar)
-        trim_button=findViewById(R.id.trim_button)
-        compressButton=findViewById(R.id.compress_button)
-        slowButton=findViewById(R.id.slow_button)
+        videoView = findViewById(R.id.videoView)
+        buttonPlayPause = findViewById(R.id.buttonPlay_Pause)
+        leftText = findViewById(R.id.leftText)
+        rightText = findViewById(R.id.rightText)
+        rangeSeekBar = findViewById(R.id.rangeSeekBar)
+        trim_button = findViewById(R.id.trim_button)
+        compressButton = findViewById(R.id.compress_button)
+        slowButton = findViewById(R.id.slow_button)
 
 
         // creating the progress dialog
@@ -66,14 +61,14 @@ class TrimVideoActivity : AppCompatActivity() {
         progressDialog.setCanceledOnTouchOutside(false)
 
 
-        i=intent
-        videoPath= i.getStringExtra("videoUri")!!
-        video_url= Uri.parse(videoPath)
+        i = intent
+        videoPath = i.getStringExtra("videoUri")!!
+        video_url = Uri.parse(videoPath)
         videoView.setVideoURI(video_url)
         videoView.start()
-        isPlaying=true
+        isPlaying = true
 
-        trim_button.setOnClickListener(object:View.OnClickListener{
+        trim_button.setOnClickListener(object : View.OnClickListener {
             override fun onClick(v: View?) {
                 // check if the user has selected any video or not
                 // In case a user hasn't selected any video and press the button,
@@ -91,7 +86,7 @@ class TrimVideoActivity : AppCompatActivity() {
                             rangeSeekBar.selectedMaxValue.toInt() * 1000
                         )
                     } catch (e: Exception) {
-                        Toast.makeText(applicationContext,e.toString(),Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, e.toString(), Toast.LENGTH_SHORT).show()
 
                         e.printStackTrace()
                     }
@@ -101,7 +96,7 @@ class TrimVideoActivity : AppCompatActivity() {
 
         })
         // to compress the video
-        compressButton.setOnClickListener(object:View.OnClickListener{
+        compressButton.setOnClickListener(object : View.OnClickListener {
             override fun onClick(v: View?) {
                 // check if the user has selected any video or not
                 // In case a user hasn't selected any video and press the button,
@@ -119,7 +114,7 @@ class TrimVideoActivity : AppCompatActivity() {
                             rangeSeekBar.selectedMaxValue.toInt() * 1000
                         )
                     } catch (e: Exception) {
-                        Toast.makeText(applicationContext,e.toString(),Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, e.toString(), Toast.LENGTH_SHORT).show()
 
                         e.printStackTrace()
                     }
@@ -130,7 +125,7 @@ class TrimVideoActivity : AppCompatActivity() {
         })
         // to get video in slow motion
 
-        slowButton.setOnClickListener(object:View.OnClickListener{
+        slowButton.setOnClickListener(object : View.OnClickListener {
             override fun onClick(v: View?) {
                 // check if the user has selected any video or not
                 // In case a user hasn't selected any video and press the button,
@@ -148,7 +143,7 @@ class TrimVideoActivity : AppCompatActivity() {
                             rangeSeekBar.selectedMaxValue.toInt() * 1000
                         )
                     } catch (e: Exception) {
-                        Toast.makeText(applicationContext,e.toString(),Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, e.toString(), Toast.LENGTH_SHORT).show()
 
                         e.printStackTrace()
                     }
@@ -208,194 +203,161 @@ class TrimVideoActivity : AppCompatActivity() {
     }
 
     //function to trim the video
-    fun trimVideo(startMs:Int,endMs:Int){
-
-        progressDialog.show()
-    // create a new file in the storage to store the trimmed video
-        val filePath:String
-        val filePrefix="trimmedVideo"
-        val fileExtn=".mp4"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // With introduction of scoped storage in Android Q the primitive method gives error
-            // So, it is recommended to use the below method to create a video file in storage.
-
-                val valueVideos =ContentValues().apply {
-                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/" + "Folder")
-                    put(MediaStore.Video.Media.DISPLAY_NAME, filePrefix + System.currentTimeMillis() + fileExtn)
-                    put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                    put(MediaStore.Video.Media.DATE_ADDED, System.currentTimeMillis() / 1000)
-                    put(MediaStore.Video.Media.DATE_TAKEN, System.currentTimeMillis())
-                   uri_ofFileCreated = getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, this)
-                }
-            val file: File? = uri_ofFileCreated?.let { getFileFromUri(this, it) }
-            filePath = file!!.absolutePath
-
-        } else {
-            var dest = File(File(app_folder), filePrefix + fileExtn)
-            var fileNo = 0
-            while (dest.exists()) {
-                fileNo++
-                dest = File(File(app_folder), filePrefix + fileNo + fileExtn)
-            }
-            filePath = dest.absolutePath
+    private fun trimVideo(startMs: Int, endMs: Int) {
+        val moviesDir = Environment.getExternalStoragePublicDirectory(
+            Environment.DIRECTORY_MOVIES
+        )
+        val filePrefix = "cut_video"
+        val fileExtn = ".mp4"
+        val yourRealPath: String = getPath(applicationContext, video_url)!!
+        var dest = File(moviesDir, filePrefix + fileExtn)
+        var fileNo = 0
+        while (dest.exists()) {
+            fileNo++
+            dest = File(moviesDir, filePrefix + fileNo + fileExtn)
         }
-        // the "exe" string contains the command to process video.The details of command are discussed later in this post.
+        Log.d(ContentValues.TAG, "startTrim: src: $yourRealPath")
+        Log.d(ContentValues.TAG, "startTrim: dest: " + dest.absolutePath)
+        Log.d(ContentValues.TAG, "startTrim: startMs: $startMs")
+        Log.d(ContentValues.TAG, "startTrim: endMs: $endMs")
+        filePath = dest.absolutePath
 
-        var start=startMs/1000
-        var end=endMs/1000
-        var exe:String="ffmpeg -ss $start -i $videoPath -c:v libX264 -preset ultrafast -crf 22 -to $end -c copy -copyts $filePath"
+        val complexCommand = arrayOf(
+            "-ss",
+            "" + startMs / 1000,
+            "-y",
+            "-i",
+            yourRealPath,
+            "-t",
+            "" + (endMs - startMs) / 1000,
+            "-vcodec",
+            "mpeg4",
+            "-b:v",
+            "2097152",
+            "-b:a",
+            "48000",
+            "-ac",
+            "2",
+            "-ar",
+            "22050",
+            filePath
+        )
+        execFFmpegBinary(complexCommand)
 
-
-           /* "-ss"+ "" + startMs / 1000+ "-y"+ "-i"+ videoPath+"-c:v libx264"+" -preset"+" ultrafast"+"-crf28"+"-filter:v"+ "-t"+ "" + (endMs - startMs) / 1000+
-        "-s"+ "320x240"+ "-r"+ "15"+ "-vcodec"+ "mpeg4"+ "-b:v"+ "2097152"+ "-b:a"+ "48000"+ "-ac"+ "2"+ "-ar"+ "22050"+ filePath*/
-
-
-
-       val executionId:Long = FFmpeg . executeAsync (exe, object : ExecuteCallback {
-            override fun apply(executionId: Long, returnCode: Int) {
-                if (returnCode == RETURN_CODE_SUCCESS) {
-                    videoView.setVideoURI(Uri.parse(filePath))
-                    videoPath = filePath
-                    videoView.start()
-                    // remove the progress dialog
-                    // remove the progress dialog
-                    progressDialog.dismiss()
-
-                } else if (returnCode == RETURN_CODE_CANCEL) {
-                    Log.i(TAG, "Async command execution cancelled by user.")
-                } else {
-                    Log.i(
-                        TAG,
-                        String.format(
-                            "Async command execution failed with returnCode=%d.",
-                            returnCode
-                        )
-                    )
-                }
-            }
-        })
     }
-    //function to trim the video
-    fun compressVideo(startMs:Int,endMs:Int){
 
-        progressDialog.show()
-        // create a new file in the storage to store the trimmed video
-        val filePath:String
-        val filePrefix="comressedVideo"
-        val fileExtn=".mp4"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // With introduction of scoped storage in Android Q the primitive method gives error
-            // So, it is recommended to use the below method to create a video file in storage.
-
-            val valueVideos =ContentValues().run {
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/" + "Folder")
-                put(MediaStore.Video.Media.DISPLAY_NAME, filePrefix + System.currentTimeMillis() + fileExtn)
-                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.DATE_ADDED, System.currentTimeMillis() / 1000)
-                put(MediaStore.Video.Media.DATE_TAKEN, System.currentTimeMillis())
-                uri_ofFileCreated = getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, this)
-            }
-            val file: File? = uri_ofFileCreated?.let { getFileFromUri(this, it) }
-            filePath = file!!.absolutePath
-
-        } else {
-            var dest = File(File(app_folder), filePrefix + fileExtn)
-            var fileNo = 0
-            while (dest.exists()) {
-                fileNo++
-                dest = File(File(app_folder), filePrefix + fileNo + fileExtn)
-            }
-            filePath = dest.absolutePath
+    //function to compress the video
+    private fun compressVideo(startMs: Int, endMs: Int) {
+        val moviesDir = Environment.getExternalStoragePublicDirectory(
+            Environment.DIRECTORY_MOVIES
+        )
+        val filePrefix = "compressed_video"
+        val fileExtn = ".mp4"
+        val yourRealPath: String = getPath(applicationContext, video_url)!!
+        var dest = File(moviesDir, filePrefix + fileExtn)
+        var fileNo = 0
+        while (dest.exists()) {
+            fileNo++
+            dest = File(moviesDir, filePrefix + fileNo + fileExtn)
         }
-        // the "exe" string contains the command to process video.The details of command are discussed later in this post.
-        var exe:String= "ffmpeg -i $videoPath -vcodec h264 -acodec mp3 $filePath"
+        Log.d(ContentValues.TAG, "startTrim: src: $yourRealPath")
+        Log.d(ContentValues.TAG, "startTrim: dest: " + dest.absolutePath)
+        Log.d(ContentValues.TAG, "startTrim: startMs: $startMs")
+        Log.d(ContentValues.TAG, "startTrim: endMs: $endMs")
+        filePath = dest.absolutePath
 
-        val executionId:Long = FFmpeg . executeAsync (exe, object : ExecuteCallback {
-            override fun apply(executionId: Long, returnCode: Int) {
-                if (returnCode == RETURN_CODE_SUCCESS) {
-                    videoView.setVideoURI(Uri.parse(filePath))
-                    videoPath = filePath
-                    videoView.start()
-                    // remove the progress dialog
-                    // remove the progress dialog
-                    progressDialog.dismiss()
+        val complexCommand = arrayOf(
+            "-y",
+            "-i",
+            yourRealPath,
+            "-s",
+            "160x120",
+            "-r",
+            "25",
+            "-vcodec",
+            "mpeg4",
+            "-b:v",
+            "150k",
+            "-b:a",
+            "48000",
+            "-ac",
+            "2",
+            "-ar",
+            "22050",
+            filePath
+        )
+        execFFmpegBinary(complexCommand)
 
-                } else if (returnCode == RETURN_CODE_CANCEL) {
-                    Log.i(TAG, "Async command execution cancelled by user.")
-                } else {
-                    Log.i(
-                        TAG,
-                        String.format(
-                            "Async command execution failed with returnCode=%d.",
-                            returnCode
-                        )
-                    )
-                }
-            }
-        })
     }
 
     // function to get slow motion
-
-    //function to trim the video
-    fun slowVideo(startMs:Int,endMs:Int){
-
-        progressDialog.show()
-        // create a new file in the storage to store the trimmed video
-        val filePath:String
-        val filePrefix="slowedVideo"
-        val fileExtn=".mp4"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // With introduction of scoped storage in Android Q the primitive method gives error
-            // So, it is recommended to use the below method to create a video file in storage.
-
-            val valueVideos =ContentValues().run {
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/" + "Folder")
-                put(MediaStore.Video.Media.DISPLAY_NAME, filePrefix + System.currentTimeMillis() + fileExtn)
-                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.DATE_ADDED, System.currentTimeMillis() / 1000)
-                put(MediaStore.Video.Media.DATE_TAKEN, System.currentTimeMillis())
-                uri_ofFileCreated = getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, this)
-            }
-            val file: File? = uri_ofFileCreated?.let { getFileFromUri(this, it) }
-            filePath = file!!.absolutePath
-
-        } else {
-            var dest = File(File(app_folder), filePrefix + fileExtn)
-            var fileNo = 0
-            while (dest.exists()) {
-                fileNo++
-                dest = File(File(app_folder), filePrefix + fileNo + fileExtn)
-            }
-            filePath = dest.absolutePath
+    private fun slowVideo(startMs: Int, endMs: Int) {
+        val moviesDir = Environment.getExternalStoragePublicDirectory(
+            Environment.DIRECTORY_MOVIES
+        )
+        val filePrefix = "slow_motion"
+        val fileExtn = ".mp4"
+        val yourRealPath: String = getPath(applicationContext, video_url)!!
+        var dest = File(moviesDir, filePrefix + fileExtn)
+        var fileNo = 0
+        while (dest.exists()) {
+            fileNo++
+            dest = File(moviesDir, filePrefix + fileNo + fileExtn)
         }
-        // the "exe" string contains the command to process video.The details of command are discussed later in this post.
+        Log.d(ContentValues.TAG, "startTrim: src: $yourRealPath")
+        Log.d(ContentValues.TAG, "startTrim: dest: " + dest.absolutePath)
+        Log.d(ContentValues.TAG, "startTrim: startMs: $startMs")
+        Log.d(ContentValues.TAG, "startTrim: endMs: $endMs")
+        filePath = dest.absolutePath
 
-        var start=startMs/1000
-        var end=endMs/1000
-        var exe:String=
-            "-y -i " + video_url + " -filter_complex [0:v]trim=0:" + startMs / 1000 + ",setpts=PTS-STARTPTS[v1];[0:v]trim=" + startMs / 1000 + ":" +
-                    endMs / 1000 + ",setpts=2*(PTS-STARTPTS)[v2];[0:v]trim=" + endMs / 1000 + ",setpts=PTS-STARTPTS[v3];[0:a]atrim=0:" +
-                    startMs / 1000 + ",asetpts=PTS-STARTPTS[a1];[0:a]atrim=" + startMs / 1000 + ":" + endMs / 1000 +
-                    ",asetpts=PTS-STARTPTS,atempo=0.5[a2];[0:a]atrim=" + endMs / 1000 +
-                    ",asetpts=PTS-STARTPTS[a3];[v1][a1][v2][a2][v3][a3]concat=n=3:v=1:a=1 " + "-b:v 2097k -vcodec mpeg4 -crf 0 -preset superfast " +
-                    filePath
+        val complexCommand = arrayOf(
+            "-y",
+            "-i",
+            yourRealPath,
+            "-filter_complex",
+            "[0:v]setpts=2.0*PTS[v];[0:a]atempo=0.5[a]",
+            "-map",
+            "[v]",
+            "-map",
+            "[a]",
+            "-b:v",
+            "2097k",
+            "-r",
+            "60",
+            "-vcodec",
+            "mpeg4",
+            filePath
+        )
+        execFFmpegBinary(complexCommand)
 
-        val executionId:Long = FFmpeg . executeAsync (exe, object : ExecuteCallback {
+    }
+
+    fun play_pause(view: View) {
+        if (isPlaying) {
+            buttonPlayPause.setImageResource(R.drawable.ic_baseline_play_arrow_24)
+            videoView.pause()
+            isPlaying = false
+        } else {
+            videoView.start()
+            buttonPlayPause.setImageResource(R.drawable.ic_baseline_pause_24)
+            isPlaying = true
+        }
+    }
+
+    private fun execFFmpegBinary(command: Array<String?>) {
+
+        val executionId: Long = FFmpeg.executeAsync(command, object : ExecuteCallback {
             override fun apply(executionId: Long, returnCode: Int) {
-                if (returnCode == RETURN_CODE_SUCCESS) {
+                if (returnCode == Config.RETURN_CODE_SUCCESS) {
                     videoView.setVideoURI(Uri.parse(filePath))
-                    videoPath = filePath
+                    videoPath = filePath!!
                     videoView.start()
-                    // remove the progress dialog
 
-                    progressDialog.dismiss()
-
-                } else if (returnCode == RETURN_CODE_CANCEL) {
-                    Log.i(TAG, "Async command execution cancelled by user.")
+                } else if (returnCode == Config.RETURN_CODE_CANCEL) {
+                    Log.i(Config.TAG, "Async command execution cancelled by user.")
                 } else {
                     Log.i(
-                        TAG,
+                        Config.TAG,
                         String.format(
                             "Async command execution failed with returnCode=%d.",
                             returnCode
@@ -404,18 +366,108 @@ class TrimVideoActivity : AppCompatActivity() {
                 }
             }
         })
+
+        Toast.makeText(this,"video edited",Toast.LENGTH_SHORT).show() }
+
+
+    /**
+     * Get a file path from a Uri. This will get the the path for Storage Access
+     * Framework Documents, as well as the _data field for the MediaStore and
+     * other file-based ContentProviders.
+     */
+    private fun getPath(context: Context, uri: Uri): String? {
+        val isKitKat = Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT
+
+        // DocumentProvider
+        if (isKitKat && DocumentsContract.isDocumentUri(context, uri)) {
+            // ExternalStorageProvider
+            if (isExternalStorageDocument(uri)) {
+                val docId = DocumentsContract.getDocumentId(uri)
+                val split = docId.split(":").toTypedArray()
+                val type = split[0]
+                if ("primary".equals(type, ignoreCase = true)) {
+                    return Environment.getExternalStorageDirectory().toString() + "/" + split[1]
+                }
+
+                // TODO handle non-primary volumes
+            } else if (isDownloadsDocument(uri)) {
+                val id = DocumentsContract.getDocumentId(uri)
+                val contentUri = ContentUris.withAppendedId(
+                    Uri.parse("content://downloads/public_downloads"), java.lang.Long.valueOf(id)
+                )
+                return getDataColumn(context, contentUri, null, null)
+            } else if (isMediaDocument(uri)) {
+                val docId = DocumentsContract.getDocumentId(uri)
+                val split = docId.split(":").toTypedArray()
+                val type = split[0]
+                var contentUri: Uri? = null
+                if ("image" == type) {
+                    contentUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                } else if ("video" == type) {
+                    contentUri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                } else if ("audio" == type) {
+                    contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                }
+                val selection = "_id=?"
+                val selectionArgs = arrayOf(
+                    split[1]
+                )
+                return contentUri?.let { getDataColumn(context, it, selection, selectionArgs) }
+            }
+        } else if ("content".equals(uri.scheme, ignoreCase = true)) {
+            return getDataColumn(context, uri, null, null)
+        } else if ("file".equals(uri.scheme, ignoreCase = true)) {
+            return uri.path
+        }
+        return null
     }
-    fun play_pause(view: View){
-        if(isPlaying){
-          buttonPlayPause.setImageResource(R.drawable.ic_baseline_play_arrow_24)
-            videoView.pause()
-            isPlaying=false
+
+    private fun getDataColumn(
+        context: Context, uri: Uri, selection: String?,
+        selectionArgs: Array<String>?
+    ): String? {
+        var cursor: Cursor? = null
+        val column = "_data"
+        val projection = arrayOf(
+            column
+        )
+        try {
+            cursor = context.getContentResolver().query(
+                uri, projection, selection, selectionArgs,
+                null
+            )
+            if (cursor != null && cursor.moveToFirst()) {
+                val column_index = cursor.getColumnIndexOrThrow(column)
+                return cursor.getString(column_index)
+            }
+        } finally {
+            cursor?.close()
         }
-        else{
-            videoView.start()
-            buttonPlayPause.setImageResource(R.drawable.ic_baseline_pause_24)
-            isPlaying=true
-        }
+        return null
+    }
+
+    /**
+     * @param uri The Uri to check.
+     * @return Whether the Uri authority is ExternalStorageProvider.
+     */
+    private fun isExternalStorageDocument(uri: Uri): Boolean {
+        return "com.android.externalstorage.documents" == uri.authority
+    }
+
+    /**
+     * @param uri The Uri to check.
+     * @return Whether the Uri authority is DownloadsProvider.
+     */
+    private fun isDownloadsDocument(uri: Uri): Boolean {
+        return "com.android.providers.downloads.documents" == uri.authority
+    }
+
+    /**
+     * @param uri The Uri to check.
+     * @return Whether the Uri authority is MediaProvider.
+     */
+    private fun isMediaDocument(uri: Uri): Boolean {
+        return "com.android.providers.media.documents" == uri.authority
     }
 
     private fun getTime(seconds: Int): String? {
@@ -428,12 +480,6 @@ class TrimVideoActivity : AppCompatActivity() {
             mn
         ) + ":" + String.format("%02d", sec)
     }
-
-
-
-
-
-
 
 
 }
