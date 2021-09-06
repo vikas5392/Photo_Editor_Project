@@ -5,6 +5,7 @@ import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.res.AssetManager
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
@@ -16,12 +17,16 @@ import android.provider.MediaStore
 import android.util.Log
 import android.view.View
 import android.widget.*
+import androidx.activity.result.ActivityResultCallback
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.arthenica.mobileffmpeg.Config
 import com.arthenica.mobileffmpeg.ExecuteCallback
 import com.arthenica.mobileffmpeg.FFmpeg
 import org.florescu.android.rangeseekbar.RangeSeekBar
-import java.io.File
+import java.io.*
+
 
 class TrimVideoActivity : AppCompatActivity() {
     lateinit var videoView: VideoView
@@ -30,16 +35,24 @@ class TrimVideoActivity : AppCompatActivity() {
     lateinit var buttonPlayPause: ImageButton
     lateinit var leftText: TextView
     lateinit var rightText: TextView
+    lateinit var inputText:EditText
+    lateinit var textButton:ImageButton
     lateinit var rangeSeekBar: RangeSeekBar<Number>
     var isPlaying = false
     var filePath: String? = null
     lateinit var trim_button: Button
     lateinit var r: Runnable
-    val root: String = Environment.getExternalStorageDirectory().toString()
     lateinit var videoPath: String
     lateinit var progressDialog: ProgressDialog
     lateinit var compressButton: Button
     lateinit var slowButton: Button
+    lateinit var overlayButton:Button
+    lateinit var getPhotoUri: ActivityResultLauncher<String>
+    lateinit var photoFromGalleryUri:Uri
+    lateinit var dir:File
+    lateinit var outFile:File
+    lateinit var pathOfFontDir:String
+    var textInput:String?=null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,7 +65,14 @@ class TrimVideoActivity : AppCompatActivity() {
         trim_button = findViewById(R.id.trim_button)
         compressButton = findViewById(R.id.compress_button)
         slowButton = findViewById(R.id.slow_button)
+        overlayButton=findViewById(R.id.overlayButton)
 
+        inputText=findViewById(R.id.inputText)
+        textButton=findViewById(R.id.textButton)
+
+        // initially the inputText and TextButton are invisible
+        inputText.visibility=View.INVISIBLE
+        textButton.visibility=View.INVISIBLE
 
         // creating the progress dialog
         progressDialog = ProgressDialog(this)
@@ -60,6 +80,12 @@ class TrimVideoActivity : AppCompatActivity() {
         progressDialog.setCancelable(false)
         progressDialog.setCanceledOnTouchOutside(false)
 
+        // to get image to be added in the video from gallery
+        getPhotoUri=registerForActivityResult(
+            ActivityResultContracts.GetContent(),
+            ActivityResultCallback { uri->
+                photoFromGalleryUri=uri
+            })
 
         i = intent
         videoPath = i.getStringExtra("videoUri")!!
@@ -67,9 +93,12 @@ class TrimVideoActivity : AppCompatActivity() {
         videoView.setVideoURI(video_url)
         videoView.start()
         isPlaying = true
+        // copy the assets to device
+        copyAssets("OpenSans-Light.ttf")
 
         trim_button.setOnClickListener(object : View.OnClickListener {
             override fun onClick(v: View?) {
+                progressDialog.show()
                 // check if the user has selected any video or not
                 // In case a user hasn't selected any video and press the button,
                 // we will show an warning, stating "Please upload the video"
@@ -98,6 +127,7 @@ class TrimVideoActivity : AppCompatActivity() {
         // to compress the video
         compressButton.setOnClickListener(object : View.OnClickListener {
             override fun onClick(v: View?) {
+                progressDialog.show()
                 // check if the user has selected any video or not
                 // In case a user hasn't selected any video and press the button,
                 // we will show an warning, stating "Please upload the video"
@@ -127,6 +157,7 @@ class TrimVideoActivity : AppCompatActivity() {
 
         slowButton.setOnClickListener(object : View.OnClickListener {
             override fun onClick(v: View?) {
+                progressDialog.show()
                 // check if the user has selected any video or not
                 // In case a user hasn't selected any video and press the button,
                 // we will show an warning, stating "Please upload the video"
@@ -139,6 +170,71 @@ class TrimVideoActivity : AppCompatActivity() {
                     // like File not found, IOException
                     try {
                         slowVideo(
+                            rangeSeekBar.selectedMinValue.toInt() * 1000,
+                            rangeSeekBar.selectedMaxValue.toInt() * 1000
+                        )
+                    } catch (e: Exception) {
+                        Toast.makeText(applicationContext, e.toString(), Toast.LENGTH_SHORT).show()
+
+                        e.printStackTrace()
+                    }
+                } else Toast.makeText(applicationContext, "Please upload video", Toast.LENGTH_SHORT)
+                    .show()
+            }
+
+        })
+
+        //to get overlay
+        overlayButton.setOnClickListener(object : View.OnClickListener {
+
+            override fun onClick(v: View?) {
+                progressDialog.show()
+
+                // check if the user has selected any video or not
+                // In case a user hasn't selected any video and press the button,
+                // we will show an warning, stating "Please upload the video"
+
+                // check if the user has selected any video or not
+                // In case a user hasn't selected any video and press the button,
+                // we will show an warning, stating "Please upload the video"
+                if (videoPath != null) {
+                    // a try-catch block to handle all necessary exceptions
+                    // like File not found, IOException
+                    try {
+                        overlayVideo(
+                            rangeSeekBar.selectedMinValue.toInt() * 1000,
+                            rangeSeekBar.selectedMaxValue.toInt() * 1000
+                        )
+                    } catch (e: Exception) {
+                        Toast.makeText(applicationContext, e.toString(), Toast.LENGTH_SHORT).show()
+
+                        e.printStackTrace()
+                    }
+                } else Toast.makeText(applicationContext, "Please upload video", Toast.LENGTH_SHORT)
+                    .show()
+            }
+
+        })
+
+        // to overlay the user enter text
+
+        textButton.setOnClickListener(object : View.OnClickListener {
+            override fun onClick(v: View?) {
+                progressDialog.show()
+                textInput=inputText.text.toString()
+
+                // check if the user has selected any video or not
+                // In case a user hasn't selected any video and press the button,
+                // we will show an warning, stating "Please upload the video"
+
+                // check if the user has selected any video or not
+                // In case a user hasn't selected any video and press the button,
+                // we will show an warning, stating "Please upload the video"
+                if (videoPath != null) {
+                    // a try-catch block to handle all necessary exceptions
+                    // like File not found, IOException
+                    try {
+                        textOverlay(
                             rangeSeekBar.selectedMinValue.toInt() * 1000,
                             rangeSeekBar.selectedMaxValue.toInt() * 1000
                         )
@@ -201,6 +297,9 @@ class TrimVideoActivity : AppCompatActivity() {
             }.also { r = it }, 1000)
         }
     }
+    fun getImage(view:View){
+        getPhotoUri.launch("image/*")
+    }
 
     //function to trim the video
     private fun trimVideo(startMs: Int, endMs: Int) {
@@ -221,7 +320,8 @@ class TrimVideoActivity : AppCompatActivity() {
         Log.d(ContentValues.TAG, "startTrim: startMs: $startMs")
         Log.d(ContentValues.TAG, "startTrim: endMs: $endMs")
         filePath = dest.absolutePath
-
+var start=startMs/1000
+        var end=endMs/1000
         val complexCommand = arrayOf(
             "-ss",
             "" + startMs / 1000,
@@ -242,6 +342,7 @@ class TrimVideoActivity : AppCompatActivity() {
             "22050",
             filePath
         )
+
         execFFmpegBinary(complexCommand)
 
     }
@@ -286,6 +387,7 @@ class TrimVideoActivity : AppCompatActivity() {
             "22050",
             filePath
         )
+
         execFFmpegBinary(complexCommand)
 
     }
@@ -332,6 +434,92 @@ class TrimVideoActivity : AppCompatActivity() {
 
     }
 
+
+    private fun overlayVideo(startMs: Int, endMs: Int) {
+
+
+        val moviesDir = Environment.getExternalStoragePublicDirectory(
+            Environment.DIRECTORY_MOVIES
+        )
+        val filePrefix = "overlay_video"
+        val fileExtn = ".mp4"
+
+
+        val yourRealPath: String = getPath(applicationContext, video_url)!!
+        //*//
+       val myImagepath:String= photoFromGalleryUri?.let { getPath(applicationContext, it) }!!
+
+        var dest = File(moviesDir, filePrefix + fileExtn)
+        var fileNo = 0
+        while (dest.exists()) {
+            fileNo++
+            dest = File(moviesDir, filePrefix + fileNo + fileExtn)
+        }
+        Log.d(ContentValues.TAG, "startTrim: src: $yourRealPath")
+        Log.d(ContentValues.TAG, "startTrim: dest: " + dest.absolutePath)
+        Log.d(ContentValues.TAG, "startTrim: startMs: $startMs")
+        Log.d(ContentValues.TAG, "startTrim: endMs: $endMs")
+        filePath = dest.absolutePath
+
+       // val complexCommand =
+          //here i used 50:50 , which reduces the image size to 50 percent
+       // "-y -i $yourRealPath -i $myImagepath -filter_complex \"[1]scale=50:-1[b];[0][b] overlay=25:25\" -pix_fmt yuv420p -c:a copy $filePath"
+//"overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2" -codec:a copy output.mp4
+        val complexCommand = arrayOf(
+            "-i",
+            yourRealPath,
+            "-i",
+            myImagepath,
+            "-filter_complex",
+           "overlay=5:5",
+            "-codec:a",
+            "copy",
+            filePath
+        )
+
+        execFFmpegBinary(complexCommand)
+
+
+    }
+   // function to control text overlay
+
+
+    // function to get text overlay
+    private fun textOverlay(startMs: Int, endMs: Int) {
+        val moviesDir = Environment.getExternalStoragePublicDirectory(
+           Environment.DIRECTORY_MOVIES
+        )
+        val filePrefix = "text_overlay"
+        val fileExtn = ".mp4"
+        val yourRealPath: String = getPath(applicationContext, video_url)!!
+        var dest = File(moviesDir, filePrefix + fileExtn)
+        var fileNo = 0
+        val font_filePath =  pathOfFontDir +"OpenSans-Light.ttf"
+        while (dest.exists()) {
+            fileNo++
+            dest = File(moviesDir, filePrefix + fileNo + fileExtn)
+        }
+        Log.d(ContentValues.TAG, "startTrim: src: $yourRealPath")
+        Log.d(ContentValues.TAG, "startTrim: dest: " + dest.absolutePath)
+        Log.d(ContentValues.TAG, "startTrim: startMs: $startMs")
+        Log.d(ContentValues.TAG, "startTrim: endMs: $endMs")
+        filePath = dest.absolutePath
+//  -i inputClip.mp4 -vf "drawtext=text='Centered Text':x=(w-text_w)/2:y=(h-text_h)/2:fontsize=24:fontcolor=white" -c:a copy output.mp4
+
+     val complexCommand = arrayOf(
+         "-i",
+         yourRealPath,
+         "-vf",
+         "drawtext=fontfile=$font_filePath:text='SiteName hulluway':fontsize=40:fontcolor=black: x=w-(t-4.5)*(w+tw)/5.5:y=100",
+         "-acodec",
+         "copy",
+         filePath
+     )
+
+       execFFmpegBinary(complexCommand)
+
+    }
+    // to control play and pause functin of video
     fun play_pause(view: View) {
         if (isPlaying) {
             buttonPlayPause.setImageResource(R.drawable.ic_baseline_play_arrow_24)
@@ -343,8 +531,12 @@ class TrimVideoActivity : AppCompatActivity() {
             isPlaying = true
         }
     }
-
-    private fun execFFmpegBinary(command: Array<String?>) {
+ // to activate on click to enter text
+    fun enterText(view:View){
+      inputText.visibility=View.VISIBLE
+     textButton.visibility=View.VISIBLE
+    }
+    private fun execFFmpegBinary(command: Array<String?> ) {
 
         val executionId: Long = FFmpeg.executeAsync(command, object : ExecuteCallback {
             override fun apply(executionId: Long, returnCode: Int) {
@@ -352,6 +544,7 @@ class TrimVideoActivity : AppCompatActivity() {
                     videoView.setVideoURI(Uri.parse(filePath))
                     videoPath = filePath!!
                     videoView.start()
+                    progressDialog.dismiss()
 
                 } else if (returnCode == Config.RETURN_CODE_CANCEL) {
                     Log.i(Config.TAG, "Async command execution cancelled by user.")
@@ -368,6 +561,8 @@ class TrimVideoActivity : AppCompatActivity() {
         })
 
         Toast.makeText(this,"video edited",Toast.LENGTH_SHORT).show() }
+
+
 
 
     /**
@@ -480,6 +675,45 @@ class TrimVideoActivity : AppCompatActivity() {
             mn
         ) + ":" + String.format("%02d", sec)
     }
+    private fun copyAssets(fileName:String) {
+        pathOfFontDir=(applicationContext.getExternalFilesDir(null)) !!.absolutePath+"/"+"VideoEditor"
+       dir=File(pathOfFontDir)
+        if(!dir.exists()){
+            dir.mkdir()
+        }
+        val assetManager:AssetManager=assets
+        var ins:InputStream?=null
+        val outs:OutputStream?=null
+        try{
+            ins=assetManager.open(fileName)
+             outFile=File(dir,fileName)
+            var outs=FileOutputStream(outFile)
+            copyFile(ins,outs)
+        }
+        catch (e:IOException){
+           e.printStackTrace()
+        }
+        finally{
+            if(ins!=null){
+                ins.close()
+            }
+            if(outs!=null){
+                outs.close()
+            }
+        }
+
+    }
+
+    @Throws(IOException::class)
+    private fun copyFile(`in`: InputStream, out: OutputStream) {
+        val buffer = ByteArray(1024)
+        var read: Int
+        while (`in`.read(buffer).also { read = it } != -1) {
+            out.write(buffer, 0, read)
+
+        }
+    }
+    }
 
 
-}
+
